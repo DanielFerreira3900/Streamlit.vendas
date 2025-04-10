@@ -1,0 +1,30 @@
+# Aqui consta o linha de código que utilizei em python para gerar valores aleatórios para alimentar meu dashboard.
+
+import pandas as pd
+import numpy as np
+
+ids = ['João', 'Maria', 'Daniel', 'Carlos', 'Tainá']
+produtos = ['consórcio', 'seguro de vida', 'seguro auto', 'capitalização', 'telefonia']
+
+valor_ranges = {
+    'consórcio': (50000, 80000),
+    'seguro de vida': (30000, 50000),
+    'seguro auto': (10000, 30000),
+    'capitalização': (5000, 10000),
+    'telefonia': (500, 5000)
+}
+
+num_linhas = 300
+dados = []
+
+for _ in range(num_linhas):
+    id_escolhido = np.random.choice(ids)
+    produto_escolhido = np.random.choice(produtos)
+    min_valor, max_valor = valor_ranges[produto_escolhido]
+    valor = np.random.randint(min_valor, max_valor + 1)
+    dados.append([id_escolhido, produto_escolhido, valor])
+
+df = pd.DataFrame(dados, columns=['id', 'produto', 'valor'])
+df.to_csv('vendas_financeiras.csv', index=False)
+
+print("Arquivo 'vendas_financeiras.csv' criado com sucesso!")
