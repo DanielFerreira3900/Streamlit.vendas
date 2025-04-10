@@ -1,0 +1,102 @@
+import pandas as pd
+import streamlit as st
+import plotly.express as px
+
+# Configuração do dashboard
+st.set_page_config(page_title="Análise de Vendas vs Metas", layout="wide")
+st.title("📊 Vendas Financeiras vs Metas Progressivas")
+
+# Carregar dados
+@st.cache_data
+def load_data():
+    return pd.read_csv(r"C:\Users\Daniel Augusto\Documents\dados\vendas_financeiras.csv")
+
+df = load_data()
+
+# Sidebar - Filtros
+st.sidebar.header("Filtros")
+
+# Top 5 vendedores
+top_vendedores = df['id'].value_counts().head(5).index.tolist()
+vendedor_selecionado = st.sidebar.selectbox(
+    "Selecione o Vendedor:",
+    options=['Todos'] + top_vendedores
+)
+
+# Aplicar filtro
+if vendedor_selecionado != 'Todos':
+    df_filtrado = df[df['id'] == vendedor_selecionado]
+else:
+    df_filtrado = df.copy()
+
+# Cálculo das metas progressivas (adaptado para o vendedor selecionado)
+vendas_por_produto = df_filtrado.groupby('produto')['valor'].sum().reset_index()
+vendas_por_produto = vendas_por_produto.sort_values('valor', ascending=False)
+
+if not vendas_por_produto.empty:
+    primeira_venda = vendas_por_produto['valor'].iloc[0]
+    percentuais = [0.10, 0.08, 0.06, 0.04, 0.02][:len(vendas_por_produto)]
+    vendas_por_produto['meta'] = [primeira_venda * (1 + p) for p in percentuais]
+    
+    # Preencher metas para produtos adicionais (se houver)
+    if len(vendas_por_produto) > len(percentuais):
+        ultimo_percentual = percentuais[-1]
+        vendas_por_produto['meta'] = vendas_por_produto['meta'].fillna(primeira_venda * (1 + ultimo_percentual))
+    
+    # Cálculos de desempenho
+    vendas_por_produto['atingimento'] = (vendas_por_produto['valor'] / vendas_por_produto['meta']) * 100
+    vendas_por_produto['faltou'] = vendas_por_produto['meta'] - vendas_por_produto['valor']
+    vendas_por_produto['faltou'] = vendas_por_produto['faltou'].apply(lambda x: max(0, x))
+
+# Visualizações
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Vendas vs Meta por Produto")
+    if not vendas_por_produto.empty:
+        fig = px.bar(vendas_por_produto, 
+                     x='produto', 
+                     y=['valor', 'meta'],
+                     barmode='group',
+                     labels={'value': 'Valor (R$)', 'variable': ''},
+                     color_discrete_map={'valor': '#4CAF50', 'meta': '#FF5722'})
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Nenhum dado disponível para o vendedor selecionado.")
+
+with col2:
+    st.subheader("Atingimento da Meta (%)")
+    if not vendas_por_produto.empty:
+        fig2 = px.bar(vendas_por_produto,
+                      x='produto',
+                      y='atingimento',
+                      text='atingimento',
+                      labels={'atingimento': 'Atingimento (%)'},
+                      color='atingimento',
+                      color_continuous_scale='RdYlGn')
+        fig2.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        fig2.update_layout(yaxis_range=[0, 120])  # Fixa escala até 120% para melhor visualização
+        st.plotly_chart(fig2, use_container_width=True)
+
+# Tabela detalhada
+st.subheader("Detalhamento por Produto")
+if not vendas_por_produto.empty:
+    # Formatação dos valores
+    vendas_por_produto['valor_fmt'] = vendas_por_produto['valor'].apply(lambda x: f"R${x:,.2f}")
+    vendas_por_produto['meta_fmt'] = vendas_por_produto['meta'].apply(lambda x: f"R${x:,.2f}")
+    vendas_por_produto['faltou_fmt'] = vendas_por_produto['faltou'].apply(lambda x: f"R${x:,.2f}")
+    
+    st.dataframe(
+        vendas_por_produto[['produto', 'valor_fmt', 'meta_fmt', 'faltou_fmt', 'atingimento']].rename(
+            columns={
+                'produto': 'Produto',
+                'valor_fmt': 'Vendas',
+                'meta_fmt': 'Meta',
+                'faltou_fmt': 'Faltou para Meta',
+                'atingimento': 'Atingimento (%)'
+            }
+        ),
+        hide_index=True
+    )
+else:
+    st.info("Selecione um vendedor para visualizar os dados.")
